@@ -1,55 +1,61 @@
+// utils/metrics.js
 const client = require("prom-client");
 
 // Create a Registry to register the metrics
 const register = new client.Registry();
 
-// Create a counter metric for tracking the number of requests
-const requestCounter = new client.Counter({
-  name: "http_requests_total",
-  help: "Total number of HTTP requests",
-  labelNames: ["method", "route", "status_code"],
+// Define some custom metrics
+const httpRequestDurationMicroseconds = new client.Histogram({
+  name: "http_request_duration_ms",
+  help: "Duration of HTTP requests in ms",
+  labelNames: ["method", "route", "code"],
+  buckets: [50, 100, 200, 300, 400, 500, 1000], // Duration buckets
 });
 
-register.registerMetric(requestCounter);
+// Register the custom metrics
+register.registerMetric(httpRequestDurationMicroseconds);
 
-// Create a histogram metric for tracking response times
-const responseTimeHistogram = new client.Histogram({
-  name: "http_response_time_seconds",
-  help: "Histogram for tracking response times in seconds",
-  labelNames: ["method", "route", "status_code"],
-});
+// Default metrics
+client.collectDefaultMetrics({ register });
 
-register.registerMetric(responseTimeHistogram);
+// Middleware to track request duration
+const trackMetricsMiddleware = (req, res, next) => {
+  const end = httpRequestDurationMicroseconds.startTimer();
+  res.on("finish", () => {
+    end({
+      method: req.method,
+      route: req.route ? req.route.path : req.path,
+      code: res.statusCode,
+    });
+  });
+  next();
+};
 
-// Expose the metrics endpoint
+// Middleware to expose metrics
 const metricsMiddleware = async (req, res, next) => {
   if (req.path === "/metrics") {
     res.set("Content-Type", register.contentType);
-    return res.end(await register.metrics());
+    res.end(await register.metrics());
+  } else {
+    next();
   }
-  next();
 };
 
-// Increment the counter and record response time for each request
-const trackMetricsMiddleware = (req, res, next) => {
-  const end = responseTimeHistogram.startTimer({
-    method: req.method,
-    route: req.route?.path || req.path,
-    status_code: res.statusCode,
-  });
-  res.on("finish", () => {
-    requestCounter.inc({
-      method: req.method,
-      route: req.route?.path || req.path,
-      status_code: res.statusCode,
-    });
-    end();
-  });
-  next();
-};
 
-module.exports = {
-  metricsMiddleware,
-  trackMetricsMiddleware,
-  register,
-};
+
+
+
+const axios = require("axios");
+
+axios
+  .get("http://localhost:3000/api/search", {
+    headers: { Authorization: `Bearer YOUR_API_KEY` },
+  })
+  .then((response) => {
+    console.log(response.data);
+  })
+  .catch((error) => {
+    console.error(error);
+  });
+
+module.exports = { metricsMiddleware, trackMetricsMiddleware };
