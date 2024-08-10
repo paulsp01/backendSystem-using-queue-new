@@ -4,6 +4,12 @@ const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const queueRoutes = require("./routes/queueRoutes");
 const QueueManager = require("./queue/queueManager");
+const { metricsMiddleware, trackMetricsMiddleware } = require('./utils/metrics');
+
+// Integrate the metrics middleware
+app.use(trackMetricsMiddleware);
+app.use(metricsMiddleware);
+
 
 dotenv.config();
 connectDB();
@@ -13,6 +19,12 @@ app.use(express.json());
 
 app.use("/api/auth", authRoutes);
 app.use("/api/queue", queueRoutes);
+
+
+// Integrate the metrics middleware
+app.use(trackMetricsMiddleware);
+app.use(metricsMiddleware);
+
 
 const startServer = async () => {
   await QueueManager.connect();
